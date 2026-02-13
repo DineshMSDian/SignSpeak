@@ -34,14 +34,15 @@ while True:
     if ret == True:
 
         # Convert BGR -> RGB frames since mediapipe only supports RGB
-        RGB_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         # Process the RGB image
-        result = hand.process(RGB_frame)
+        result = hand.process(frame)
+        #Convert RGB -> BGR after processing
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
         if result.multi_hand_landmarks:
             for hand_land_marks in result.multi_hand_landmarks:
-                print(hand_land_marks)
-
+                mp_drawing.draw_landmarks(frame, hand_land_marks, mp_hands.HAND_CONNECTIONS)
 
         # Write the frame to the output file
         out.write(frame)
