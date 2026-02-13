@@ -44,9 +44,19 @@ while True:
         if result.multi_hand_landmarks:
             for hand_land_marks in result.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(frame, hand_land_marks, mp_hands.HAND_CONNECTIONS)
+                
+                # Empty list to store the X,Y,Z coordinates of hand 
+                hand_data_list = []
+
+                # nested loop to append each X,Y, and Z coordinates into the hand_data_list
+                for points in hand_land_marks.landmark:
+                    hand_data_list.append(points.x)
+                    hand_data_list.append(points.y)
+                    hand_data_list.append(points.z)
+            # print(hand_data_list)
 
         # Write the frame to the output file
-        out.write(frame)
+        # out.write(frame)
 
         # Display the captured frame
         cv2.imshow("Capture", frame)
@@ -60,5 +70,5 @@ while True:
 
 # release the capture and writer objects
 camera.release()
-out.release()
+# out.release()
 cv2.destroyAllWindows()
