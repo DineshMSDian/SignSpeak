@@ -42,22 +42,54 @@ while True:
         
         # Process the RGB image
         result = hand.process(frame)
+
         #Convert RGB -> BGR after processing
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-        if result.multi_hand_landmarks:
-            for hand_land_marks in result.multi_hand_landmarks:
-                mp_drawing.draw_landmarks(frame, hand_land_marks, mp_hands.HAND_CONNECTIONS)
-                
-                # Empty list to store the X,Y,Z coordinates of hand 
-                hand_data_list = []
+        # To store each hand's coordinates seperately
+        left_hand_data = np.zeros(63)
+        right_hand_data = np.zeros(63)
 
-                # nested loop to append each X,Y, and Z coordinates into the hand_data_list
-                for points in hand_land_marks.landmark:
-                    hand_data_list.append(points.x)
-                    hand_data_list.append(points.y)
-                    hand_data_list.append(points.z)
-            # print(hand_data_list)
+        # If hands are present in video (frame)
+        if result.multi_hand_landmarks:
+            # for hand_land_marks in result.multi_hand_landmarks:
+            #     mp_drawing.draw_landmarks(frame, hand_land_marks, mp_hands.HAND_CONNECTIONS)
+                
+            for hand_landmarks, handedness in zip(result.multi_hand_landmarks, result.multi_handedness):
+                mp_drawing.draw_landmarks(
+                    frame,
+                    hand_landmarks,
+                    mp_hands.HAND_CONNECTIONS
+                    # mp_drawing_styles.get_default_hand_landmarks_style(),
+                    # mp_drawing_styles.get_default_hand_connections_style()
+                )
+                
+                label = handedness.classification[0].label
+                # Extract the math coordinates of left hand
+                if label == 'Left':
+                    temp_list_left = []
+                    for points in hand_landmarks.landmark:
+                        temp_list_left.append(points.x)
+                        temp_list_left.append(points.y)
+                        temp_list_left.append(points.z)
+
+                    # Overwrite the zeros with extrcted datas
+                    left_hand_data = np.array(temp_list_left)
+                
+                # Extract the math coordinates of right hand
+                elif label == 'Right':
+                    temp_list_right = []
+                    for points in hand_landmarks.landmark:
+                        temp_list_right.append(points.x)
+                        temp_list_right.append(points.y)
+                        temp_list_right.append(points.z)
+                    
+                    # Overwrite the zeros with extrcted datas
+                    right_hand_data = np.array(temp_list_right)
+
+        # Combine them into one flat 126-number array       
+        final_frame_data = np.concatenate([left_hand_data, right_hand_data])
+        print("Total Frame Data Shape:", final_frame_data.shape)
 
         # Write the frame to the output file
         # out.write(frame)
