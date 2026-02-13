@@ -20,7 +20,7 @@ mp_drawing = mp.solutions.drawing_utils             # Visualization Helper Tool
 mp_drawing_styles = mp.solutions.drawing_styles     # (optional) for colour style
 
 # Blueprint for the model
-hands = mp_hands.Hands(
+hand = mp_hands.Hands(
     static_image_model = False,
     max_num_hands = 2,
     min_detection_confidence = 0.5,
@@ -32,6 +32,12 @@ while True:
     # ret = return true if the frame available
     ret, frame = camera.read() 
     if ret == True:
+
+        # Convert BGR -> RGB frames since mediapipe only supports RGB
+        RGB_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # Process the RGB image
+        result = hand.process(RGB_frame)
+        
 
         # Write the frame to the output file
         out.write(frame)
