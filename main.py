@@ -1,5 +1,6 @@
 import cv2 
 import mediapipe as mp
+import numpy as np
 
 # Open the default camera
 camera = cv2.VideoCapture(0)
@@ -10,8 +11,8 @@ frame_height = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
 #print(f"{frame_width} x {frame_height}")
 
 # Define the codec and create VideoWriter object
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('first_capture.mp4', fourcc, 20.0, (frame_width, frame_height))
+# fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+# out = cv2.VideoWriter('first_capture.mp4', fourcc, 20.0, (frame_width, frame_height))
 
 # Initializing Mediapipe
 
