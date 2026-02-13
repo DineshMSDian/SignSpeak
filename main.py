@@ -36,6 +36,10 @@ while True:
 
         # Convert BGR -> RGB frames since mediapipe only supports RGB
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Flip the video frame, by default mediapipe acts like a mirror.
+        frame = cv2.flip(frame, 1)
+        
         # Process the RGB image
         result = hand.process(frame)
         #Convert RGB -> BGR after processing
