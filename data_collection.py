@@ -1,6 +1,7 @@
 import cv2 
 import mediapipe as mp
 import numpy as np
+import os
 
 # Open the default camera
 camera = cv2.VideoCapture(0)
@@ -22,11 +23,19 @@ mp_drawing_styles = mp.solutions.drawing_styles     # (optional) for colour styl
 
 # Blueprint for the model
 hand = mp_hands.Hands(
-    static_image_mode = False,
     max_num_hands = 2,
     min_detection_confidence = 0.5,
-    min_tracking_confidence = 0.5
+    min_tracking_confidence = 0.5,
+    model_complexity = 0
 )
+
+
+# Data Collection starts!!
+
+gesture_name = input("Enter Gesture Name: ").strip().lower()
+
+# Create folder structure
+os.makedirs(f"datasets/raw/{gesture_name}", exist_ok = True)
 
 while True:
 
@@ -59,9 +68,9 @@ while True:
                 mp_drawing.draw_landmarks(
                     frame,
                     hand_landmarks,
-                    mp_hands.HAND_CONNECTIONS
-                    # mp_drawing_styles.get_default_hand_landmarks_style(),
-                    # mp_drawing_styles.get_default_hand_connections_style()
+                    mp_hands.HAND_CONNECTIONS,
+                    mp_drawing_styles.get_default_hand_landmarks_style(),
+                    mp_drawing_styles.get_default_hand_connections_style()
                 )
                 
                 label = handedness.classification[0].label
