@@ -43,11 +43,13 @@ SAMPLES_TO_COLLECT = 50     # 50 samples each gesture
 frame_buffer = []
 frame_counter = 0
 sample_counter = 0
+is_recording = False
 
 print(f"\nCollecting {SAMPLES_TO_COLLECT} samples for gesture: {gesture_name}")
 print("Press 's' to start recording each sample\n")
 
-while True:
+# loop automatically stops after collecting 50 samples.
+while sample_counter < SAMPLES_TO_COLLECT:
 
     # ret = return true if the frame available
     ret, frame = camera.read() 
@@ -108,11 +110,45 @@ while True:
 
         # Combine them into one flat 126-number array       
         final_frame_data = np.concatenate([left_hand_data, right_hand_data])
-        print("Total Frame Data Shape:", final_frame_data.shape)
+        # print("Total Frame Data Shape:", final_frame_data.shape)  # Comment-out this. can be used only for debugging purpose
+
+        # If recording, save frames to buffer
+        if is_recording:
+            frame_buffer.append(final_frame_data)
+            frame_counter += 1
+
+            cv2.putText(frame, f"RECORDING: {frame_buffer}/{SEQUANCE_LENGTH}", 10, 30, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), -1)
+            cv2.circle(frame, (frame_width - 30, 30), 10, (0, 0, 255), -1)
+
+            # After collecting 60 frames, save them as a sequance
+            if frame_counter >= SEQUANCE_LENGTH:
+                sequance_array = np.array(frame_buffer)
+
+                # Storing sample in the designated location
+                file_name = f"Sample_{frame_counter + 1:03d}.npy"
+                file_path = f"datasets/raw/{gesture_name}/{file_name}"
+                np.save(file_path, sequance_array)
+
+                # Print confirmation
+                sample_counter += 1
+                print(f"✓ Saved sample {sample_counter}/{SAMPLES_TO_COLLECT}: {file_name}")
+
+                # Reset for next frames
+                frame_buffer = []
+                frame_counter = 0
+                is_recording = False
+
+                if sample_counter < SAMPLES_TO_COLLECT:
+                    print("  Press 's' to record next sample...")
+                    
+        # Display status even when not recording
+        cv2.putText(frame, f"Samples: {sample_counter}/{SAMPLES_TO_COLLECT}", (10, frame_height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        if not is_recording:
+            cv2.putText(frame, "Press 's' to START", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
 
         # Write the frame to the output file
         # out.write(frame)
-
         # Display the captured frame
         cv2.imshow("Capture", frame)
 
