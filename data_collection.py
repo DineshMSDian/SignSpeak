@@ -112,6 +112,9 @@ while sample_counter < SAMPLES_TO_COLLECT:
         final_frame_data = np.concatenate([left_hand_data, right_hand_data])
         # print("Total Frame Data Shape:", final_frame_data.shape)  # Comment-out this. can be used only for debugging purpose
 
+
+        # RECORDING LOGIC STARTS HERE
+        
         # If recording, save frames to buffer
         if is_recording:
             frame_buffer.append(final_frame_data)
@@ -140,7 +143,7 @@ while sample_counter < SAMPLES_TO_COLLECT:
 
                 if sample_counter < SAMPLES_TO_COLLECT:
                     print("  Press 's' to record next sample...")
-                    
+
         # Display status even when not recording
         cv2.putText(frame, f"Samples: {sample_counter}/{SAMPLES_TO_COLLECT}", (10, frame_height - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         if not is_recording:
@@ -152,9 +155,16 @@ while sample_counter < SAMPLES_TO_COLLECT:
         # Display the captured frame
         cv2.imshow("Capture", frame)
 
-        # press 'q' to exit the loop
-        if cv2.waitKey(1) == ord('q'):
+        # prss 's' to enter recording , press 'q' to exit the loop
+        key = cv2.waitKey(1) & 0xff
+        
+        if key == ord('s') and not is_recording:
+            is_recording = True
+
+        elif key == ord('q'):
+            print("\Stopped by the user")
             break
+
     else:
         print("Frames not Captured")
         break
