@@ -1,7 +1,9 @@
+import os
+import warnings
+import time
 import cv2 
 import mediapipe as mp
 import numpy as np
-import os
 
 # Open the default camera
 camera = cv2.VideoCapture(0)
@@ -29,6 +31,12 @@ hand = mp_hands.Hands(
     model_complexity = 0
 )
 
+# A Small workaround for ignoring mediapipe warnings
+time.sleep(0.5)
+
+# Now clear the screen and show clean interface
+os.system('cls' if os.name == 'nt' else 'clear')
+
 
 # Data Collection starts!!
 
@@ -38,7 +46,7 @@ gesture_name = input("Enter Gesture Name: ").strip().lower()
 os.makedirs(f"datasets/raw/{gesture_name}", exist_ok = True)
 
 # Recording Variables
-SEQUANCE_LENGTH = 60        # 2 secs @30fps
+SEQUENCE_LENGTH = 60        # 2 secs @30fps
 SAMPLES_TO_COLLECT = 50     # 50 samples each gesture
 frame_buffer = []
 frame_counter = 0
@@ -120,17 +128,17 @@ while sample_counter < SAMPLES_TO_COLLECT:
             frame_buffer.append(final_frame_data)
             frame_counter += 1
 
-            cv2.putText(frame, f"RECORDING: {frame_buffer}/{SEQUANCE_LENGTH}", 10, 30, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), -1)
+            cv2.putText(frame, f"RECORDING: {frame_counter}/{SEQUENCE_LENGTH}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             cv2.circle(frame, (frame_width - 30, 30), 10, (0, 0, 255), -1)
 
             # After collecting 60 frames, save them as a sequance
-            if frame_counter >= SEQUANCE_LENGTH:
-                sequance_array = np.array(frame_buffer)
+            if frame_counter >= SEQUENCE_LENGTH:
+                sequence_array = np.array(frame_buffer)
 
                 # Storing sample in the designated location
-                file_name = f"Sample_{frame_counter + 1:03d}.npy"
+                file_name = f"sample_{sample_counter + 1:03d}.npy"
                 file_path = f"datasets/raw/{gesture_name}/{file_name}"
-                np.save(file_path, sequance_array)
+                np.save(file_path, sequence_array)
 
                 # Print confirmation
                 sample_counter += 1
@@ -173,3 +181,10 @@ while sample_counter < SAMPLES_TO_COLLECT:
 camera.release()
 # out.release()
 cv2.destroyAllWindows()
+
+# Dev notes for, data collection stats
+print("\n" + "="*50)
+print(f"Collection complete for '{gesture_name}'")
+print(f"Total samples collected: {sample_counter}")
+print(f"Saved to: dataset/raw/{gesture_name}/")
+print("="*50 + "\n")
