@@ -37,6 +37,16 @@ gesture_name = input("Enter Gesture Name: ").strip().lower()
 # Create folder structure
 os.makedirs(f"datasets/raw/{gesture_name}", exist_ok = True)
 
+# Recording Variables
+SEQUANCE_LENGTH = 60        # 2 secs @30fps
+SAMPLES_TO_COLLECT = 50     # 50 samples each gesture
+frame_buffer = []
+frame_counter = 0
+sample_counter = 0
+
+print(f"\nCollecting {SAMPLES_TO_COLLECT} samples for gesture: {gesture_name}")
+print("Press 's' to start recording each sample\n")
+
 while True:
 
     # ret = return true if the frame available
