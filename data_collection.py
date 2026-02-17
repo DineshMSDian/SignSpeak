@@ -5,6 +5,9 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
+# Base directory (script location) for consistent path resolution
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Open the default camera
 camera = cv2.VideoCapture(0)
 
@@ -43,13 +46,16 @@ os.system('cls' if os.name == 'nt' else 'clear')
 gesture_name = input("Enter Gesture Name: ").strip().lower()
 
 # Create folder structure
-os.makedirs(f"datasets/raw/{gesture_name}", exist_ok = True)
+save_dir = os.path.join(BASE_DIR, "datasets", "raw", gesture_name)
+os.makedirs(save_dir, exist_ok = True)
 
 # Recording Variables
 SEQUENCE_LENGTH = 60        # 2 secs @30fps
 SAMPLES_TO_COLLECT = 50     # 50 samples each gesture
+MIN_HAND_FRAMES = 30        # At least 50% of frames must have a hand detected
 frame_buffer = []
 frame_counter = 0
+hand_detected_count = 0
 sample_counter = 0
 is_recording = False
 
@@ -75,9 +81,10 @@ while sample_counter < SAMPLES_TO_COLLECT:
         #Convert RGB -> BGR after processing
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-        # To store each hand's coordinates seperately
+        # To store each hand's coordinates separately
         left_hand_data = np.zeros(63)
         right_hand_data = np.zeros(63)
+        hand_present = False
 
         # If hands are present in video (frame)
         if result.multi_hand_landmarks:
@@ -93,6 +100,7 @@ while sample_counter < SAMPLES_TO_COLLECT:
                     mp_drawing_styles.get_default_hand_connections_style()
                 )
                 
+                hand_present = True
                 label = handedness.classification[0].label
                 # Extract the math coordinates of left hand
                 if label == 'Left':
@@ -123,30 +131,41 @@ while sample_counter < SAMPLES_TO_COLLECT:
 
         # RECORDING LOGIC STARTS HERE
         
-        # If recording, save frames to buffer
+        # If recording, save frames to buffer (skip frames with no hand detected)
         if is_recording:
-            frame_buffer.append(final_frame_data)
-            frame_counter += 1
+            if hand_present:
+                frame_buffer.append(final_frame_data)
+                frame_counter += 1
+                hand_detected_count += 1
+            else:
+                # Still count the frame to maintain timing, but store zeros
+                frame_buffer.append(final_frame_data)
+                frame_counter += 1
 
             cv2.putText(frame, f"RECORDING: {frame_counter}/{SEQUENCE_LENGTH}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             cv2.circle(frame, (frame_width - 30, 30), 10, (0, 0, 255), -1)
 
-            # After collecting 60 frames, save them as a sequance
+            # After collecting 60 frames, validate and save them as a sequence
             if frame_counter >= SEQUENCE_LENGTH:
-                sequence_array = np.array(frame_buffer)
+                # Validate: require minimum hand-detected frames
+                if hand_detected_count >= MIN_HAND_FRAMES:
+                    sequence_array = np.array(frame_buffer)
 
-                # Storing sample in the designated location
-                file_name = f"sample_{sample_counter + 1:03d}.npy"
-                file_path = f"datasets/raw/{gesture_name}/{file_name}"
-                np.save(file_path, sequence_array)
+                    # Storing sample in the designated location
+                    file_name = f"sample_{sample_counter + 1:03d}.npy"
+                    file_path = os.path.join(save_dir, file_name)
+                    np.save(file_path, sequence_array)
 
-                # Print confirmation
-                sample_counter += 1
-                print(f"✓ Saved sample {sample_counter}/{SAMPLES_TO_COLLECT}: {file_name}")
+                    # Print confirmation
+                    sample_counter += 1
+                    print(f"✓ Saved sample {sample_counter}/{SAMPLES_TO_COLLECT}: {file_name} ({hand_detected_count}/{SEQUENCE_LENGTH} hand frames)")
+                else:
+                    print(f"✗ Discarded — only {hand_detected_count}/{SEQUENCE_LENGTH} frames had a hand detected (need {MIN_HAND_FRAMES}). Try again.")
 
-                # Reset for next frames
+                # Reset for next recording
                 frame_buffer = []
                 frame_counter = 0
+                hand_detected_count = 0
                 is_recording = False
 
                 if sample_counter < SAMPLES_TO_COLLECT:
@@ -170,7 +189,7 @@ while sample_counter < SAMPLES_TO_COLLECT:
             is_recording = True
 
         elif key == ord('q'):
-            print("\Stopped by the user")
+            print("\nStopped by the user")
             break
 
     else:
@@ -186,5 +205,5 @@ cv2.destroyAllWindows()
 print("\n" + "="*50)
 print(f"Collection complete for '{gesture_name}'")
 print(f"Total samples collected: {sample_counter}")
-print(f"Saved to: dataset/raw/{gesture_name}/")
+print(f"Saved to: {save_dir}")
 print("="*50 + "\n")
