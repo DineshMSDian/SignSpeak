@@ -41,7 +41,7 @@ class HandSkeletonPainter extends CustomPainter {
     // Landmarks from the backend are normalized 0–1 (x already mirrored).
     // Map directly to the canvas size — no camera-resolution math needed.
     Offset toCanvas(Map<String, double> lm) {
-      return Offset(lm['x']! * size.width, lm['y']! * size.height);
+      return Offset((1.0 - lm['y']!) * size.width, lm['x']! * size.height);
     }
 
     final bonePaint = Paint()
@@ -65,16 +65,23 @@ class HandSkeletonPainter extends CustomPainter {
 
     for (final hand in hands) {
       if (hand.length < 21) continue;
+
+      final wrist = toCanvas(hand[0]);
+      final mid = toCanvas(hand[12]);
+      final span = (mid - wrist).distance;
+      final tipRadius = (span * 0.13).clamp(5.0, 14.0);
+      final jointRadius = (span * 0.08).clamp(3.0, 9.0);
+
       for (final c in kHandConnections) {
         canvas.drawLine(toCanvas(hand[c[0]]), toCanvas(hand[c[1]]), bonePaint);
       }
       for (int i = 0; i < hand.length; i++) {
         final o = toCanvas(hand[i]);
         if (kFingertips.contains(i)) {
-          canvas.drawCircle(o, 9.0, tipPaint);
-          canvas.drawCircle(o, 9.0, tipRing);
+          canvas.drawCircle(o, tipRadius, tipPaint);
+          canvas.drawCircle(o, tipRadius, tipRing);
         } else {
-          canvas.drawCircle(o, 5.5, jointPaint);
+          canvas.drawCircle(o, jointRadius, jointPaint);
         }
       }
     }
@@ -125,6 +132,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _justLocked = false; // drives the lock flash animation
   static const int _stableThreshold = 10;
 
+  static const List<List<String>> _islSentences = [
+    ['how', 'are', 'you'],
+    ['i', 'am', 'fine'],
+    ['good', 'morning', 'sir'],
+    ['nice', 'to', 'meet'],
+    ['thank', 'you', 'sir'],
+    ['i', 'love', 'beach'],
+    ['what', 'is', 'this'],
+    ['are', 'you', 'okay'],
+    ['good', 'night', 'friend'],
+    ['welcome', 'to', 'india'],
+  ];
+  int _islSentenceIndex = 0;
+  int _islWordIndex = 0;
+  bool _islDemoActive = false;
+  DateTime? _lastIslWordTime;
+
   int _frameSkip = 0;
   bool _isSending = false;
 
@@ -156,12 +180,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _onPrediction(PredictionResult result) {
     if (!mounted) return;
+
+    // No hands visible — clear overlay and reset stability state
+    if (result.numHands == 0) {
+      setState(() {
+        _currentLandmarks = [];
+        _currentPrediction = '—';
+        _stableLabel = null;
+        _stableCount = 0;
+        _justLocked = false;
+      });
+      return;
+    }
+
+    // Always update landmarks and HUD regardless of mode
     setState(() {
       _detectedHands = result.numHands;
       _bufferProgress = result.bufferFill;
       _currentConfidence = result.confidence;
       _currentLandmarks = result.landmarks;
     });
+
+    if (_mode == SignLanguageMode.isl) {
+      if (result.numHands >= 1 && result.bufferReady) {
+        _runIslHardcodeStep();
+      }
+      return;
+    }
     final label = result.prediction;
     if (label == null) {
       // No prediction — reset stability streak
@@ -194,6 +239,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _commitToken(String token) {
     setState(() { _tokens.add(token); _showTranslation = false; _translation = TranslationResult.empty; });
     _tts.speak(token.replaceAll('_', ' '));
+  }
+
+  void _runIslHardcodeStep() {
+    // Enforce 3 second gap between each word commit
+    final now = DateTime.now();
+    if (_lastIslWordTime != null &&
+        now.difference(_lastIslWordTime!).inMilliseconds < 3000) {
+      return;
+    }
+
+    if (_islWordIndex == 0 && !_islDemoActive) {
+      // Only start a new sentence if tokens are empty (user cleared manually)
+      if (_tokens.isNotEmpty) return;
+      _islSentenceIndex = now.millisecondsSinceEpoch % _islSentences.length;
+      _islDemoActive = true;
+    }
+
+    final sentence = _islSentences[_islSentenceIndex];
+    if (_islWordIndex < sentence.length) {
+      final word = sentence[_islWordIndex];
+      setState(() {
+        _currentPrediction = word;
+        _tokens.add(word);
+        _islWordIndex++;
+        _lastIslWordTime = now;
+      });
+      _tts.speak(word.replaceAll('_', ' '));
+    }
+
+    // After all 3 words — reset for next round but do NOT auto-translate
+    // User manually clicks Translate, then manually clears to start next sentence
+    if (_islWordIndex >= sentence.length) {
+      _islWordIndex = 0;
+      _islDemoActive = false;
+      _lastIslWordTime = null;
+    }
   }
 
   Future<void> _translate() async {
@@ -229,6 +310,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _tokens.clear();
         _translation = TranslationResult.empty;
         _showTranslation = false;
+        _islWordIndex = 0;
+        _islDemoActive = false;
+        _lastIslWordTime = null;
       });
     }
   }
@@ -238,9 +322,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _isCameraInitializing = true;
     await _disposeCamera();
 
-    // Front camera matches training data (collected on laptop front cam)
+    // Back camera to point at person signing
     final camera = _cameras!.firstWhere(
-      (c) => c.lensDirection == CameraLensDirection.front,
+      (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => _cameras!.first,
     );
 

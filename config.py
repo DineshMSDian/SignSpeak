@@ -34,7 +34,7 @@ LR_REDUCE_PATIENCE = 5     # ReduceLROnPlateau patience
 LR_REDUCE_FACTOR = 0.5     # LR reduction factor
 
 # ─── Prediction Parameters ─────────────────────────────────────
-CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence for prediction
+CONFIDENCE_THRESHOLD = 0.3  # Minimum confidence for prediction
 DEBOUNCE_FRAMES = 15        # Frames to skip after a prediction
 
 # ─── MediaPipe Detection ───────────────────────────────────────

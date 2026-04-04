@@ -90,7 +90,7 @@ class SignSpeakBackend:
                 label_map=self.label_map,
                 confidence_threshold=config.CONFIDENCE_THRESHOLD,
             )
-            self.smoother = SmoothedPredictor(self.predictor, vote_window=15)
+            self.smoother = SmoothedPredictor(self.predictor, vote_window=5)
             print(f"[SERVER] {mode} model loaded — {len(self.label_map)} classes")
         else:
             self.predictor = None
@@ -145,7 +145,7 @@ class SignSpeakBackend:
                 hand_points = []
                 for lm in hand_landmarks.landmark:
                     # MediaPipe x/y are normalized between 0.0 and 1.0
-                    hand_points.append({"x": 1.0 - lm.x, "y": lm.y})
+                    hand_points.append({"x": lm.x, "y": lm.y})
                 flutter_landmarks.append(hand_points)
 
                 for lm_idx, lm in enumerate(hand_landmarks.landmark):
