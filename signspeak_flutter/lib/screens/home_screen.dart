@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import '../config.dart';
 import '../services/backend_service.dart';
+import '../services/gemini_service.dart';
 import '../services/tts_service.dart';
 import '../widgets/server_config_dialog.dart';
 
@@ -28,37 +27,21 @@ const Set<int> kFingertips = {4, 8, 12, 16, 20};
 // ══════════════════════════════════════════════════════════════════
 class HandSkeletonPainter extends CustomPainter {
   final List<List<Map<String, double>>> hands;
-  final Size previewSize;
-  final bool mirrorX;
+  final Size imageSize; // unused — kept for API compat, pass Size.zero
 
   const HandSkeletonPainter({
     required this.hands,
-    required this.previewSize,
-    this.mirrorX = true,
+    this.imageSize = Size.zero,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (hands.isEmpty) return;
 
-    // BoxFit.cover: scale to fill, crop excess
-    final double camAspect = previewSize.width / previewSize.height;
-    final double widgetAspect = size.width / size.height;
-
-    double scaleX, scaleY, offsetX = 0, offsetY = 0;
-    if (camAspect > widgetAspect) {
-      scaleY = size.height;
-      scaleX = size.height * camAspect;
-      offsetX = (size.width - scaleX) / 2;
-    } else {
-      scaleX = size.width;
-      scaleY = size.width / camAspect;
-      offsetY = (size.height - scaleY) / 2;
-    }
-
+    // Landmarks from the backend are normalized 0–1 (x already mirrored).
+    // Map directly to the canvas size — no camera-resolution math needed.
     Offset toCanvas(Map<String, double> lm) {
-      final nx = mirrorX ? (1.0 - lm['x']!) : lm['x']!;
-      return Offset(offsetX + nx * scaleX, offsetY + lm['y']! * scaleY);
+      return Offset(lm['x']! * size.width, lm['y']! * size.height);
     }
 
     final bonePaint = Paint()
@@ -102,48 +85,6 @@ class HandSkeletonPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Gemini Service — English + Tamil + Hindi
-// ══════════════════════════════════════════════════════════════════
-class GeminiService {
-  static const String _apiKey = 'YOUR_GEMINI_API_KEY'; // ← replace
-  static const String _endpoint =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$_apiKey';
-
-  static Future<Map<String, String>> translate(
-      List<String> tokens, bool isASL) async {
-    if (tokens.isEmpty) return {'english': '', 'tamil': '', 'hindi': ''};
-    final input = isASL ? tokens.join('') : tokens.join(' ');
-    final prompt = isASL
-        ? 'These are ASL fingerspelled letters: "$input". Combine into the most likely word or sentence. '
-            'Reply ONLY with JSON: {"english":"...","tamil":"...","hindi":"..."} — no explanation.'
-        : 'These are ISL gesture words: "$input". Form a natural English sentence, translate to Tamil and Hindi. '
-            'Reply ONLY with JSON: {"english":"...","tamil":"...","hindi":"..."} — no explanation.';
-
-    try {
-      final res = await http.post(Uri.parse(_endpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'contents': [{'parts': [{'text': prompt}]}],
-          'generationConfig': {'temperature': 0.2, 'maxOutputTokens': 200},
-        }),
-      ).timeout(const Duration(seconds: 12));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] as String? ?? '';
-        final clean = text.replaceAll(RegExp(r'```json|```'), '').trim();
-        final parsed = jsonDecode(clean) as Map<String, dynamic>;
-        return {
-          'english': parsed['english'] as String? ?? input,
-          'tamil': parsed['tamil'] as String? ?? '',
-          'hindi': parsed['hindi'] as String? ?? '',
-        };
-      }
-    } catch (e) { debugPrint('[Gemini] $e'); }
-    return {'english': input, 'tamil': '', 'hindi': ''};
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════
 // HomeScreen
 // ══════════════════════════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
@@ -161,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isCameraRunning = false;
   bool _isCameraInitializing = false;
   bool _isDisposing = false;
-  Size _previewSize = const Size(640, 480);
 
   SignLanguageMode _mode = SignLanguageMode.asl;
   String _currentPrediction = '—';
@@ -175,16 +115,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<List<Map<String, double>>> _currentLandmarks = [];
 
   final List<String> _tokens = [];
-  Map<String, String> _translation = {};
+  TranslationResult _translation = TranslationResult.empty;
   bool _isTranslating = false;
   bool _showTranslation = false;
 
-  // Hold-to-confirm
-  String? _holdCandidate;
-  DateTime? _holdStart;
-  DateTime? _lastCommit;
-  static const _holdDur = Duration(milliseconds: 1200);
-  static const _cooldown = Duration(milliseconds: 900);
+  // Stability filter — commit after 10 consecutive identical predictions
+  String? _stableLabel;
+  int _stableCount = 0;
+  bool _justLocked = false; // drives the lock flash animation
+  static const int _stableThreshold = 10;
 
   int _frameSkip = 0;
   bool _isSending = false;
@@ -224,38 +163,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _currentLandmarks = result.landmarks;
     });
     final label = result.prediction;
-    if (label == null) return;
-    setState(() => _currentPrediction = label);
-
-    final now = DateTime.now();
-    if (_lastCommit != null && now.difference(_lastCommit!) < _cooldown) {
-      _holdCandidate = null;
+    if (label == null) {
+      // No prediction — reset stability streak
+      setState(() { _stableLabel = null; _stableCount = 0; });
       return;
     }
-    if (label == _holdCandidate) {
-      if (_holdStart != null && now.difference(_holdStart!) >= _holdDur) {
-        _commitToken(label);
-        _holdCandidate = null;
-        _holdStart = null;
-        _lastCommit = now;
-      }
+    setState(() => _currentPrediction = label);
+
+    // Stability filter: count consecutive identical predictions
+    if (label == _stableLabel) {
+      _stableCount++;
     } else {
-      _holdCandidate = label;
-      _holdStart = now;
+      _stableLabel = label;
+      _stableCount = 1;
+      _justLocked = false;
+    }
+
+    // Commit when threshold reached & different from last token
+    if (_stableCount >= _stableThreshold && !_justLocked) {
+      final lastToken = _tokens.isNotEmpty ? _tokens.last : null;
+      if (label != lastToken) {
+        _commitToken(label);
+      }
+      setState(() { _justLocked = true; _stableCount = 0; });
+    } else {
+      setState(() {});
     }
   }
 
   void _commitToken(String token) {
-    setState(() { _tokens.add(token); _showTranslation = false; _translation = {}; });
+    setState(() { _tokens.add(token); _showTranslation = false; _translation = TranslationResult.empty; });
     _tts.speak(token.replaceAll('_', ' '));
   }
 
   Future<void> _translate() async {
     if (_tokens.isEmpty) return;
     setState(() => _isTranslating = true);
-    final result = await GeminiService.translate(_tokens, _mode == SignLanguageMode.asl);
+    final result = await GeminiService.translateSequence(_tokens, _mode == SignLanguageMode.asl);
     if (mounted) setState(() { _translation = result; _isTranslating = false; _showTranslation = true; });
-    if ((result['english'] ?? '').isNotEmpty) _tts.speak(result['english']!);
+    if (result.english.isNotEmpty) _tts.speak(result.english);
   }
 
   Future<void> _connectToServer() async {
@@ -281,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _currentPrediction = '—';
         _currentConfidence = 0.0;
         _tokens.clear();
-        _translation = {};
+        _translation = TranslationResult.empty;
         _showTranslation = false;
       });
     }
@@ -306,9 +252,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await controller.initialize();
       if (!mounted) { controller.dispose(); _isCameraInitializing = false; return; }
       _cameraController = controller;
-      final ps = controller.value.previewSize;
-      // previewSize is in landscape; for portrait we swap w/h
-      if (ps != null) _previewSize = Size(ps.height, ps.width);
       await controller.startImageStream(_onFrame);
       setState(() { _isCameraRunning = true; _errorMessage = null; });
     } catch (e) {
@@ -551,6 +494,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // ── Camera view ────────────────────────────────────────────────
   Widget _buildCameraView() {
+    final bool cameraReady = _isCameraRunning &&
+        _cameraController != null &&
+        _cameraController!.value.isInitialized;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: ClipRRect(
@@ -558,9 +505,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Camera or placeholder
-            if (_isCameraRunning && _cameraController != null && _cameraController!.value.isInitialized)
-              CameraPreview(_cameraController!)
+            // Camera preview with correct aspect ratio
+            if (cameraReady)
+              AspectRatio(
+                aspectRatio: _cameraController!.value.aspectRatio,
+                child: CameraPreview(_cameraController!),
+              )
             else
               Container(
                 decoration: const BoxDecoration(
@@ -576,32 +526,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ])),
               ),
 
-            // ✅ Skeleton with proper BoxFit.cover-aware coordinate mapping
-            if (_isCameraRunning && _currentLandmarks.isNotEmpty)
+            // Skeleton overlay — scale 0-1 landmarks directly to canvas size
+            if (cameraReady && _currentLandmarks.isNotEmpty)
               LayoutBuilder(builder: (ctx, box) => CustomPaint(
                 painter: HandSkeletonPainter(
                   hands: _currentLandmarks,
-                  previewSize: _previewSize,
-                  mirrorX: true,
+                  imageSize: Size.zero,
                 ),
                 size: Size(box.maxWidth, box.maxHeight),
               )),
 
-            // Live prediction badge
+            // Live prediction badge with stability progress
             if (_isCameraRunning && _currentPrediction != '—')
               Positioned(
                 top: 14, left: 0, right: 0,
-                child: Center(child: Container(
+                child: Center(child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.65),
+                    color: _justLocked
+                        ? const Color(0xFF34D399).withOpacity(0.85)
+                        : Colors.black.withOpacity(0.65),
                     borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: const Color(0xFF6C63FF), width: 1.5),
+                    border: Border.all(
+                      color: _justLocked ? const Color(0xFF34D399) : const Color(0xFF6C63FF),
+                      width: _justLocked ? 2.5 : 1.5,
+                    ),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    // Lock icon when committed
+                    if (_justLocked) ...[
+                      const Icon(Icons.lock_rounded, color: Colors.white, size: 18),
+                      const SizedBox(width: 6),
+                    ],
                     Text(_currentPrediction.toUpperCase(),
                         style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
                     const SizedBox(width: 10),
+                    // Confidence chip
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
@@ -615,14 +576,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ? const Color(0xFF34D399) : const Color(0xFFFBBF24),
                               fontSize: 13, fontWeight: FontWeight.w700)),
                     ),
+                    // Stability count ring
+                    if (!_justLocked && _stableCount > 0) ...[
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 28, height: 28,
+                        child: Stack(alignment: Alignment.center, children: [
+                          CircularProgressIndicator(
+                            value: _stableCount / _stableThreshold,
+                            strokeWidth: 3,
+                            backgroundColor: Colors.white24,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color.lerp(const Color(0xFF6C63FF), const Color(0xFF34D399),
+                                  _stableCount / _stableThreshold)!),
+                          ),
+                          Text('$_stableCount',
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                        ]),
+                      ),
+                    ],
                   ]),
                 )),
               ),
-
-            // Hold ring
-            if (_holdCandidate != null)
-              Positioned(bottom: 14, right: 14,
-                  child: _HoldRing(letter: _holdCandidate!, holdStart: _holdStart, holdDuration: _holdDur)),
 
             // HUD
             Positioned(top: 14, left: 14,
@@ -655,7 +630,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: const Color(0xFF0F0F1A),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFF2D2D4E)),
       ),
@@ -694,7 +669,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 12),
                 GestureDetector(
-                  onTap: () => setState(() { _tokens.clear(); _translation = {}; _showTranslation = false; }),
+                  onTap: () => setState(() { _tokens.clear(); _translation = TranslationResult.empty; _showTranslation = false; }),
                   child: const Icon(Icons.delete_sweep_rounded, color: Color(0xFF64748B), size: 16),
                 ),
               ],
@@ -737,89 +712,75 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1)),
                 const Spacer(),
                 GestureDetector(
-                  onTap: () { if ((_translation['english'] ?? '').isNotEmpty) _tts.speak(_translation['english']!); },
+                  onTap: () { if (_translation.english.isNotEmpty) _tts.speak(_translation.english); },
                   child: const Icon(Icons.volume_up_rounded, color: Color(0xFF34D399), size: 16),
                 ),
               ]),
               const SizedBox(height: 8),
-              if ((_translation['english'] ?? '').isNotEmpty)
-                _TransRow('🇬🇧', _translation['english']!, Colors.white),
-              if ((_translation['tamil'] ?? '').isNotEmpty) ...[
+              if (_translation.english.isNotEmpty)
+                _TransRow('🇬🇧', _translation.english, Colors.white),
+              if (_translation.tamil.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                _TransRow('தமிழ்', _translation['tamil']!, const Color(0xFF00C9FF)),
+                _TransRow('தமிழ்', _translation.tamil, const Color(0xFF00C9FF)),
               ],
-              if ((_translation['hindi'] ?? '').isNotEmpty) ...[
+              if (_translation.hindi.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                _TransRow('हिंदी', _translation['hindi']!, const Color(0xFFFFB347)),
+                _TransRow('हिंदी', _translation.hindi, const Color(0xFFFFB347)),
               ],
             ]),
           ),
 
-        // Translate button
+        // Translate + Clear buttons
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          child: SizedBox(
-            width: double.infinity, height: 48,
-            child: ElevatedButton.icon(
-              onPressed: (_tokens.isEmpty || _isTranslating) ? null : _translate,
-              icon: _isTranslating
-                  ? const SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.language_rounded),
-              label: Text(_isTranslating ? 'Translating…' : 'Translate with Gemini'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C63FF),
-                disabledBackgroundColor: const Color(0xFF1E293B),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          child: Row(children: [
+            // Clear sequence button
+            SizedBox(
+              width: 48, height: 48,
+              child: IconButton(
+                onPressed: _tokens.isEmpty
+                    ? null
+                    : () => setState(() {
+                          _tokens.clear();
+                          _translation = TranslationResult.empty;
+                          _showTranslation = false;
+                        }),
+                icon: const Icon(Icons.delete_forever_rounded),
+                color: const Color(0xFFF87171),
+                disabledColor: const Color(0xFF334155),
+                style: IconButton.styleFrom(
+                  backgroundColor: _tokens.isNotEmpty
+                      ? const Color(0xFFF87171).withOpacity(0.12)
+                      : const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                tooltip: 'Clear sequence',
               ),
             ),
-          ),
+            const SizedBox(width: 10),
+            // Translate button
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: (_tokens.isEmpty || _isTranslating) ? null : _translate,
+                  icon: _isTranslating
+                      ? const SizedBox(width: 18, height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.language_rounded),
+                  label: Text(_isTranslating ? 'Translating…' : 'Translate with Gemini'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6C63FF),
+                    disabledBackgroundColor: const Color(0xFF1E293B),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ),
+          ]),
         ),
-      ]),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════
-// Hold Ring — properly animated with its own timer
-// ══════════════════════════════════════════════════════════════════
-class _HoldRing extends StatefulWidget {
-  final String letter;
-  final DateTime? holdStart;
-  final Duration holdDuration;
-  const _HoldRing({required this.letter, required this.holdStart, required this.holdDuration});
-
-  @override
-  State<_HoldRing> createState() => _HoldRingState();
-}
-
-class _HoldRingState extends State<_HoldRing> {
-  late final Timer _t;
-  @override
-  void initState() {
-    super.initState();
-    _t = Timer.periodic(const Duration(milliseconds: 40), (_) { if (mounted) setState(() {}); });
-  }
-  @override
-  void dispose() { _t.cancel(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = widget.holdStart == null ? 0.0
-        : (DateTime.now().difference(widget.holdStart!).inMilliseconds /
-            widget.holdDuration.inMilliseconds).clamp(0.0, 1.0);
-    return SizedBox(width: 56, height: 56,
-      child: Stack(alignment: Alignment.center, children: [
-        CircularProgressIndicator(
-          value: progress, strokeWidth: 4,
-          backgroundColor: Colors.white24,
-          valueColor: AlwaysStoppedAnimation<Color>(
-              Color.lerp(const Color(0xFF6C63FF), const Color(0xFFFFD700), progress)!),
-        ),
-        Text(widget.letter.toUpperCase(),
-            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
       ]),
     );
   }
