@@ -1,0 +1,22 @@
+{
+  "answer": 0,
+  "bye": 1,
+  "close": 2,
+  "confusion": 3,
+  "good_morning": 4,
+  "good_night": 5,
+  "hello": 6,
+  "i_don't_understand": 7,
+  "nice_to_meet_you": 8,
+  "no": 9,
+  "not": 10,
+  "open": 11,
+  "place": 12,
+  "pleased": 13,
+  "thank_you": 14,
+  "tiny": 15,
+  "welcome": 16,
+  "what_happened": 17,
+  "what_is_your_name": 18,
+  "yes": 19
+}
