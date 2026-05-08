@@ -13,7 +13,6 @@ import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import config
 
-
 class ContinuousPredictor:
     """
     Real-time continuous gesture prediction engine.
@@ -42,20 +41,16 @@ class ContinuousPredictor:
         self.model = model
         self.confidence_threshold = confidence_threshold
         self.debounce_frames = debounce_frames
-        self.allowed_labels = allowed_labels  # None = accept all
+        self.allowed_labels = allowed_labels
 
-        # Build reverse label map: index → label name
         self.label_map = label_map or {}
         self.reverse_label_map = {v: k for k, v in self.label_map.items()}
 
-        # Debounce state
         self._last_prediction = None
         self._frames_since_prediction = 0
 
-        # Sentence builder
         self.sentence_builder = SentenceBuilder()
 
-        # Performance tracking
         self._last_inference_time = 0.0
 
     def set_model(self, model):
@@ -92,34 +87,29 @@ class ContinuousPredictor:
         if self.model is None:
             return None, 0.0, "no_model"
 
-        # Add batch dimension: (1, 60, 126)
         input_data = np.expand_dims(sequence, axis=0).astype(np.float32)
 
         start = time.perf_counter()
         predictions = self.model.predict(input_data, verbose=0)
-        self._last_inference_time = (time.perf_counter() - start) * 1000  # ms
+        self._last_inference_time = (time.perf_counter() - start) * 1000
 
         class_idx = np.argmax(predictions[0])
         confidence = float(predictions[0][class_idx])
         raw_label = self.reverse_label_map.get(class_idx, f"class_{class_idx}")
 
-        # ── Confidence Filter ──────────────────────────────────
         if confidence < self.confidence_threshold:
             self._frames_since_prediction += 1
             return None, confidence, raw_label
 
-        # ── Allowed Labels Filter ─────────────────────────────
         if self.allowed_labels is not None and raw_label not in self.allowed_labels:
             self._frames_since_prediction += 1
             return None, confidence, raw_label
 
-        # ── Debounce Logic ─────────────────────────────────────
         if raw_label == self._last_prediction:
             self._frames_since_prediction += 1
             if self._frames_since_prediction < self.debounce_frames:
                 return None, confidence, raw_label
 
-        # ── Accept Prediction ──────────────────────────────────
         self._last_prediction = raw_label
         self._frames_since_prediction = 0
 
@@ -140,7 +130,6 @@ class ContinuousPredictor:
     def current_sentence(self) -> str:
         """Current accumulated sentence."""
         return self.sentence_builder.get_sentence()
-
 
 class SentenceBuilder:
     """
@@ -225,11 +214,9 @@ class SmoothedPredictor:
         self._last_emitted = None
         self._cooldown = 0
         
-# ── Standalone Test ────────────────────────────────────────────
 if __name__ == "__main__":
     print("[TEST] Continuous Prediction Engine")
 
-    # Test SentenceBuilder
     sb = SentenceBuilder()
     sb.add_word("hello")
     sb.add_word("world")
@@ -240,7 +227,6 @@ if __name__ == "__main__":
     assert len(sb) == 0
     print("  ✓ SentenceBuilder works correctly")
 
-    # Test predictor without model (should return None)
     pred = ContinuousPredictor()
     seq = np.random.rand(config.SEQUENCE_LENGTH, config.FEATURE_DIM).astype(np.float32)
     label, conf, raw = pred.predict(seq)

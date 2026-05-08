@@ -13,7 +13,6 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import config
 
-
 class HandCapture:
     """
     Real-time hand landmark capture using OpenCV and MediaPipe.
@@ -38,8 +37,6 @@ class HandCapture:
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_styles = mp.solutions.drawing_styles
         self._running = False
-
-    # ── Lifecycle ──────────────────────────────────────────────
 
     def start(self) -> bool:
         """Initialize webcam and MediaPipe Hands. Returns True if successful."""
@@ -71,8 +68,6 @@ class HandCapture:
     def is_running(self) -> bool:
         return self._running and self.cap is not None and self.cap.isOpened()
 
-    # ── Frame Capture ──────────────────────────────────────────
-
     def get_frame(self):
         """
         Read a single frame from the webcam.
@@ -84,10 +79,8 @@ class HandCapture:
             return None
         ret, frame = self.cap.read()
         if ret:
-            frame = cv2.flip(frame, 1)  # Mirror horizontally
+            frame = cv2.flip(frame, 1)
         return frame if ret else None
-
-    # ── Landmark Extraction ────────────────────────────────────
 
     def extract_landmarks(self, frame: np.ndarray):
         """
@@ -99,7 +92,6 @@ class HandCapture:
             annotated_frame (np.ndarray): Frame with landmark overlay drawn.
             num_hands (int): Number of hands actually detected (0, 1, or 2).
         """
-        # Convert BGR → RGB for MediaPipe
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = self.hands.process(rgb)
@@ -107,7 +99,6 @@ class HandCapture:
 
         annotated = frame.copy()
 
-        # Initialize zero-filled landmarks for both hands
         all_landmarks = np.zeros(
             (config.NUM_HANDS * config.NUM_LANDMARKS, config.NUM_COORDS),
             dtype=np.float32,
@@ -122,7 +113,6 @@ class HandCapture:
                 if hand_idx >= config.NUM_HANDS:
                     break
 
-                # Draw landmarks on the annotated frame
                 self.mp_draw.draw_landmarks(
                     annotated,
                     hand_landmarks,
@@ -131,14 +121,11 @@ class HandCapture:
                     self.mp_styles.get_default_hand_connections_style(),
                 )
 
-                # Extract (x, y, z) for each of the 21 landmarks
                 for lm_idx, lm in enumerate(hand_landmarks.landmark):
                     offset = hand_idx * config.NUM_LANDMARKS
                     all_landmarks[offset + lm_idx] = [lm.x, lm.y, lm.z]
 
         return all_landmarks, annotated, num_hands
-
-    # ── Convenience ────────────────────────────────────────────
 
     def capture_and_extract(self):
         """
@@ -162,8 +149,6 @@ class HandCapture:
     def __exit__(self, *args):
         self.stop()
 
-
-# ── Standalone Test ────────────────────────────────────────────
 if __name__ == "__main__":
     print("[INFO] Starting Hand Capture Engine — press 'q' to quit")
     with HandCapture() as hc:

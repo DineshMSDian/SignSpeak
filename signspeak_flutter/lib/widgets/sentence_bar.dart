@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Sentence builder widget — displays accumulated words as chips
-/// with undo/clear/speak controls.
 class SentenceBar extends StatelessWidget {
   final List<String> words;
   final VoidCallback onSpeak;
@@ -41,7 +39,6 @@ class SentenceBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Label
           const Text(
             '📝 YOUR SENTENCE',
             style: TextStyle(
@@ -53,7 +50,6 @@ class SentenceBar extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // Words or empty state
           if (words.isEmpty)
             const Text(
               'Words will appear here as you sign...',
@@ -64,7 +60,6 @@ class SentenceBar extends StatelessWidget {
               ),
             )
           else ...[
-            // Word chips
             Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -94,7 +89,6 @@ class SentenceBar extends StatelessWidget {
             ),
             const SizedBox(height: 10),
 
-            // Full sentence
             Container(
               padding: const EdgeInsets.only(top: 8),
               decoration: const BoxDecoration(
@@ -114,7 +108,6 @@ class SentenceBar extends StatelessWidget {
 
           const SizedBox(height: 14),
 
-          // Action buttons
           Row(
             children: [
               Expanded(

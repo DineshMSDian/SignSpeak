@@ -20,7 +20,6 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import numpy as np
 import tensorflow as tf
 
-
 def convert_model(keras_path: str, tflite_path: str):
     """Convert a .keras model to .tflite format using concrete functions."""
     if not os.path.exists(keras_path):
@@ -31,13 +30,12 @@ def convert_model(keras_path: str, tflite_path: str):
     model = tf.keras.models.load_model(keras_path)
 
     # Get a concrete function with fixed input signature
-    input_shape = model.input_shape  # (None, 60, 126)
+    input_shape = model.input_shape
     run = tf.function(lambda x: model(x))
     concrete_func = run.get_concrete_function(
         tf.TensorSpec([1, input_shape[1], input_shape[2]], tf.float32)
     )
 
-    # Convert using the concrete function
     converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_func])
     tflite_model = converter.convert()
 
@@ -49,7 +47,6 @@ def convert_model(keras_path: str, tflite_path: str):
     print(f"  Saved:   {tflite_path}")
     print(f"  Size:    {original_size:.0f} KB → {tflite_size:.0f} KB")
 
-    # Verify
     interpreter = tf.lite.Interpreter(model_path=tflite_path)
     interpreter.allocate_tensors()
     inp = interpreter.get_input_details()
@@ -57,7 +54,6 @@ def convert_model(keras_path: str, tflite_path: str):
     print(f"  Input:   {inp[0]['shape']} {inp[0]['dtype']}")
     print(f"  Output:  {out[0]['shape']} {out[0]['dtype']}")
 
-    # Sanity check: run inference
     test_input = np.random.rand(1, input_shape[1], input_shape[2]).astype(np.float32)
     interpreter.set_tensor(inp[0]['index'], test_input)
     interpreter.invoke()
@@ -65,7 +61,6 @@ def convert_model(keras_path: str, tflite_path: str):
     print(f"  Test OK: output shape {output.shape}, sum={output.sum():.4f}")
 
     return True
-
 
 def main():
     print("=" * 60)
@@ -104,7 +99,6 @@ def main():
     print(f"  Converted {converted} model(s) to TFLite")
     print(f"  Assets saved to: {flutter_assets}")
     print(f"{'=' * 60}")
-
 
 if __name__ == "__main__":
     main()

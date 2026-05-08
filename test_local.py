@@ -7,7 +7,7 @@ No Streamlit needed — runs with just OpenCV + TTS.
 Usage:
   python test_local.py --mode asl
   python test_local.py --mode isl
-  python test_local.py              # defaults to ASL
+  python test_local.py
 
 Controls:
   a  = Add current prediction to sentence
@@ -36,7 +36,6 @@ from modules.predictor import ContinuousPredictor
 from modules.tts_engine import TTSEngine
 from modules.model import load_trained_model
 
-
 def main():
     parser = argparse.ArgumentParser(description="SignSpeak Local Test")
     parser.add_argument("--mode", choices=["asl", "isl"], default="asl",
@@ -45,7 +44,6 @@ def main():
 
     mode = args.mode.upper()
 
-    # Load model
     if mode == "ASL":
         model_path = config.ASL_MODEL_PATH
         label_path = config.ASL_LABEL_MAP_PATH
@@ -67,7 +65,6 @@ def main():
         label_map = json.load(f)
     print(f"[INFO] Loaded {len(label_map)} classes: {', '.join(sorted(label_map.keys()))}")
 
-    # Initialize
     predictor = ContinuousPredictor(
         model=model,
         label_map=label_map,
@@ -101,17 +98,14 @@ def main():
 
             frame_count += 1
 
-            # Normalize and buffer
             normalized = normalize_landmarks(landmarks)
             buf.push(normalized)
 
-            # Mode and buffer info
             cv2.putText(annotated, f"Mode: {mode}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             cv2.putText(annotated, f"Buffer: {buf.current_length}/{config.SEQUENCE_LENGTH}",
                         (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
-            # Predict
             if buf.is_ready() and frame_count % 2 == 0:
                 seq = buf.get_sequence()
                 label, conf, raw_label = predictor.predict(seq)
@@ -123,7 +117,6 @@ def main():
                     display_name = label.replace("_", " ")
                     print(f"  >> {display_name.upper()} ({conf:.0%})")
 
-                    # Auto-speak prediction
                     tts.speak(display_name)
 
                     cv2.putText(annotated, f">> {display_name.upper()} ({conf:.0%})",
@@ -132,20 +125,16 @@ def main():
                     cv2.putText(annotated, f"({raw_label} {conf:.0%})",
                                 (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (128, 128, 128), 1)
 
-            # Show sentence at bottom
             sentence_str = " ".join(sentence_words) if sentence_words else "No sentence yet"
             cv2.putText(annotated, f"Sentence: {sentence_str}", (10, annotated.shape[0] - 20),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 255), 2)
 
-            # Show prediction
             cv2.putText(annotated, f"Prediction: {current_prediction}",
                         (10, annotated.shape[0] - 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 255, 200), 2)
 
-            # Display
             cv2.imshow(f"SignSpeak — {mode} Mode", annotated)
 
-            # Handle keys
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 break
@@ -174,11 +163,9 @@ def main():
         hc.stop()
         cv2.destroyAllWindows()
 
-    # Print final sentence
     if sentence_words:
         final = " ".join(w.replace("_", " ") for w in sentence_words)
         print(f"\n[FINAL SENTENCE] {final}")
-
 
 if __name__ == "__main__":
     main()

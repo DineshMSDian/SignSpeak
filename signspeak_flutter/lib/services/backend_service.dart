@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// Prediction result from the Python backend.
 class PredictionResult {
   final String? prediction;
   final double confidence;
@@ -34,7 +33,10 @@ class PredictionResult {
       for (var hand in json['landmarks']) {
         List<Map<String, double>> points = [];
         for (var pt in hand) {
-          points.add({'x': (pt['x'] as num).toDouble(), 'y': (pt['y'] as num).toDouble()});
+          points.add({
+            'x': (pt['x'] as num).toDouble(),
+            'y': (pt['y'] as num).toDouble(),
+          });
         }
         parsedLandmarks.add(points);
       }
@@ -53,7 +55,6 @@ class PredictionResult {
   }
 }
 
-/// WebSocket client that communicates with the Python FastAPI backend.
 class BackendService {
   WebSocketChannel? _channel;
   String _serverIp = '192.168.1.100';
@@ -76,7 +77,6 @@ class BackendService {
     _serverPort = port;
   }
 
-  /// Connect to the Python backend via WebSocket.
   Future<bool> connect() async {
     try {
       disconnect();
@@ -117,7 +117,6 @@ class BackendService {
     }
   }
 
-  /// Send a JPEG frame to the backend.
   void sendFrame(Uint8List jpegBytes) {
     if (!_isConnected || _channel == null) return;
     try {
@@ -128,7 +127,6 @@ class BackendService {
     }
   }
 
-  /// Switch ASL/ISL mode on the backend via HTTP.
   Future<Map<String, dynamic>?> setMode(String mode) async {
     try {
       final client = HttpClient();
@@ -146,7 +144,6 @@ class BackendService {
     }
   }
 
-  /// Check if server is reachable.
   Future<Map<String, dynamic>?> healthCheck() async {
     try {
       final client = HttpClient();

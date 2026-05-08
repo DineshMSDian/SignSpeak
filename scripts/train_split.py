@@ -6,9 +6,9 @@ Trains two separate LSTM models from the reorganized data:
   data/raw/ISL/hello, bye, ...    → models/sign_lstm_isl.keras
 
 Usage:
-  python scripts/train_split.py          # Train both
-  python scripts/train_split.py --asl    # Train ASL only
-  python scripts/train_split.py --isl    # Train ISL only
+  python scripts/train_split.py
+  python scripts/train_split.py --asl
+  python scripts/train_split.py --isl
 """
 
 import os
@@ -27,7 +27,6 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.utils import to_categorical
 from modules.model import build_lstm_model
-
 
 def load_data_from_dir(data_dir):
     """Load all sequences from a directory. Each subfolder = one class."""
@@ -56,7 +55,6 @@ def load_data_from_dir(data_dir):
 
     return np.array(X_all, dtype=np.float32), np.array(y_all, dtype=np.int32), label_map
 
-
 def train_model(mode):
     """Train a single model for the given mode ('asl' or 'isl')."""
     mode_upper = mode.upper()
@@ -75,26 +73,21 @@ def train_model(mode):
     print(f"  Data directory: {data_dir}")
     print(f"{'=' * 60}")
 
-    # Load data
     X_all, y_all, label_map = load_data_from_dir(data_dir)
     num_classes = len(label_map)
     print(f"\n[INFO] Labels ({num_classes}): {list(label_map.keys())}")
     print(f"[INFO] Total samples: {len(X_all)}")
 
-    # Split
     X_train, X_test, y_train, y_test = train_test_split(
         X_all, y_all, test_size=0.2, random_state=42, stratify=y_all
     )
     print(f"[INFO] Train: {X_train.shape}, Test: {X_test.shape}")
 
-    # One-hot encode
     y_train_cat = to_categorical(y_train, num_classes=num_classes)
     y_test_cat = to_categorical(y_test, num_classes=num_classes)
 
-    # Build model
     model = build_lstm_model(num_classes=num_classes)
 
-    # Callbacks
     callbacks = [
         tf.keras.callbacks.EarlyStopping(
             monitor="val_loss", patience=config.EARLY_STOP_PATIENCE,
@@ -110,7 +103,6 @@ def train_model(mode):
         ),
     ]
 
-    # Train
     print(f"\n[INFO] Training for max {config.EPOCHS} epochs...\n")
     model.fit(
         X_train, y_train_cat,
@@ -121,7 +113,6 @@ def train_model(mode):
         verbose=1,
     )
 
-    # Results
     train_loss, train_acc = model.evaluate(X_train, y_train_cat, verbose=0)
     test_loss, test_acc = model.evaluate(X_test, y_test_cat, verbose=0)
     print(f"\n{'=' * 60}")
@@ -130,12 +121,10 @@ def train_model(mode):
     print(f"  Test Accuracy:  {test_acc:.4f}  |  Loss: {test_loss:.4f}")
     print(f"{'=' * 60}")
 
-    # Save label map
     with open(label_map_path, "w") as f:
         json.dump(label_map, f, indent=2)
     print(f"[INFO] Model saved → {model_path}")
     print(f"[INFO] Label map saved → {label_map_path}")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train split ASL/ISL models")

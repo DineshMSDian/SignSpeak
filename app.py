@@ -1,14 +1,3 @@
-"""
-SignSpeak — Real-Time Sign Language Translator
-───────────────────────────────────────────────
-Streamlit Web Application
-
-Loads separate ASL/ISL models based on user selection.
-Predictions show in real-time, auto-speak, auto-add to sentence.
-
-Launch:  streamlit run app.py
-"""
-
 import os
 import sys
 import json
@@ -28,9 +17,6 @@ from modules.predictor import ContinuousPredictor
 from modules.tts_engine import TTSEngine
 from modules.model import load_trained_model
 
-# ═══════════════════════════════════════════════════════════════
-# Page Config
-# ═══════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="SignSpeak — Sign Language Translator",
     page_icon="🤟",
@@ -38,9 +24,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ═══════════════════════════════════════════════════════════════
-# Custom CSS
-# ═══════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -48,67 +31,63 @@ st.markdown("""
 
     .main-header {
         text-align: center; padding: 0.5rem 0 0.2rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg,
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         font-size: 2.4rem; font-weight: 800; letter-spacing: -0.5px;
     }
     .sub-header {
-        text-align: center; color: #9ca3af; font-size: 0.85rem;
+        text-align: center; color:
         margin-bottom: 1rem; font-weight: 400;
     }
     .mode-badge {
         display: inline-block; padding: 0.3rem 1rem; border-radius: 20px;
         font-size: 0.8rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
     }
-    .mode-asl { background: #3b82f6; color: white; }
-    .mode-isl { background: #8b5cf6; color: white; }
+    .mode-asl { background:
+    .mode-isl { background:
     .prediction-box {
-        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-        border: 2px solid #6366f1; border-radius: 16px; padding: 1.2rem;
+        background: linear-gradient(135deg,
+        border: 2px solid
         text-align: center; margin: 0.5rem 0;
         box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15);
     }
     .prediction-text {
-        font-size: 2.5rem; font-weight: 800; color: #e0e7ff;
+        font-size: 2.5rem; font-weight: 800; color:
         text-transform: uppercase; letter-spacing: 2px;
         text-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
     }
     .prediction-label {
-        font-size: 0.75rem; color: #818cf8; text-transform: uppercase;
+        font-size: 0.75rem; color:
         letter-spacing: 3px; margin-bottom: 0.2rem; font-weight: 600;
     }
-    .confidence-text { font-size: 0.85rem; color: #a5b4fc; margin-top: 0.2rem; font-weight: 500; }
+    .confidence-text { font-size: 0.85rem; color:
     .sentence-box {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        border: 1px solid #334155; border-radius: 16px; padding: 1rem 1.5rem;
+        background: linear-gradient(135deg,
+        border: 1px solid
         margin: 0.5rem 0; min-height: 50px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
     .sentence-label {
-        color: #64748b; font-size: 0.7rem; text-transform: uppercase;
+        color:
         letter-spacing: 2px; font-weight: 600; margin-bottom: 0.3rem;
     }
-    .sentence-text { color: #f1f5f9; font-size: 1.1rem; font-weight: 500; line-height: 1.6; }
-    .sentence-empty { color: #475569; font-style: italic; font-size: 0.95rem; }
+    .sentence-text { color:
+    .sentence-empty { color:
     .word-chip {
-        display: inline-block; background: #312e81; color: #c7d2fe;
+        display: inline-block; background:
         padding: 0.2rem 0.6rem; border-radius: 8px; margin: 0.1rem 0.15rem;
-        font-size: 0.9rem; font-weight: 500; border: 1px solid #4338ca;
+        font-size: 0.9rem; font-weight: 500; border: 1px solid
     }
     [data-testid="stSidebar"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
-
-# ═══════════════════════════════════════════════════════════════
-# Session State
-# ═══════════════════════════════════════════════════════════════
 def init_session_state():
     defaults = {
         "model": None,
         "label_map": None,
         "model_loaded": False,
-        "loaded_mode": None,        # which mode's model is loaded
+        "loaded_mode": None,
         "tts_engine": None,
         "running": False,
         "current_prediction": "—",
@@ -123,10 +102,6 @@ def init_session_state():
 
 init_session_state()
 
-
-# ═══════════════════════════════════════════════════════════════
-# Model Loading (per mode)
-# ═══════════════════════════════════════════════════════════════
 @st.cache_resource
 def load_model_for_mode(mode):
     """Load the model and label map for the given mode."""
@@ -144,16 +119,9 @@ def load_model_for_mode(mode):
             label_map = json.load(f)
     return model, label_map
 
-
-# ═══════════════════════════════════════════════════════════════
-# Header
-# ═══════════════════════════════════════════════════════════════
 st.markdown('<h1 class="main-header">🤟 SignSpeak</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Real-Time Sign Language Translator</p>', unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════
-# Mode Selector
-# ═══════════════════════════════════════════════════════════════
 mode = st.radio(
     "Select Sign Language",
     options=["ASL", "ISL"],
@@ -162,12 +130,11 @@ mode = st.radio(
     help="ASL = A-Z Letters  •  ISL = Gestures",
 )
 
-# If mode changed, reset predictions
 if mode != st.session_state.mode:
     st.session_state.mode = mode
     st.session_state.current_prediction = "—"
     st.session_state.current_confidence = 0.0
-    st.session_state.loaded_mode = None  # force reload
+    st.session_state.loaded_mode = None
 
 st.session_state.mode = mode
 
@@ -176,10 +143,6 @@ if mode == "ASL":
 else:
     st.markdown('<span class="mode-badge mode-isl">🤲 ISL — Gesture Recognition</span>', unsafe_allow_html=True)
 
-
-# ═══════════════════════════════════════════════════════════════
-# Load Model for Selected Mode
-# ═══════════════════════════════════════════════════════════════
 model, label_map = load_model_for_mode(mode)
 
 if model is not None and label_map is not None:
@@ -193,14 +156,9 @@ else:
     st.error(f"❌ No {mode} model found. Run `python scripts/train_split.py --{mode.lower()}` first.")
     st.stop()
 
-# Initialize TTS
 if st.session_state.tts_engine is None:
     st.session_state.tts_engine = TTSEngine(enabled=True)
 
-
-# ═══════════════════════════════════════════════════════════════
-# Camera Controls
-# ═══════════════════════════════════════════════════════════════
 st.markdown("---")
 start_col, stop_col = st.columns(2)
 with start_col:
@@ -211,15 +169,9 @@ with stop_col:
 if stop_btn:
     st.session_state.running = False
 
-# ═══════════════════════════════════════════════════════════════
-# Placeholders (updated in real-time inside camera loop)
-# ═══════════════════════════════════════════════════════════════
 camera_placeholder = st.empty()
 prediction_placeholder = st.empty()
 
-# ═══════════════════════════════════════════════════════════════
-# Sentence Display + Action Buttons
-# ═══════════════════════════════════════════════════════════════
 st.markdown("---")
 
 words = st.session_state.sentence_words
@@ -267,10 +219,6 @@ if clear_btn:
     st.session_state.current_confidence = 0.0
     st.rerun()
 
-
-# ═══════════════════════════════════════════════════════════════
-# Static prediction when camera is not running
-# ═══════════════════════════════════════════════════════════════
 if not st.session_state.running and not start_btn:
     conf_pct = st.session_state.current_confidence * 100
     prediction_placeholder.markdown(f"""
@@ -281,10 +229,6 @@ if not st.session_state.running and not start_btn:
     </div>
     """, unsafe_allow_html=True)
 
-
-# ═══════════════════════════════════════════════════════════════
-# Camera Loop — Real-time predictions, auto-TTS, auto-add
-# ═══════════════════════════════════════════════════════════════
 if start_btn and st.session_state.model_loaded:
     st.session_state.running = True
 
@@ -314,17 +258,14 @@ if start_btn and st.session_state.model_loaded:
 
                 frame_count += 1
 
-                # Normalize and buffer
                 normalized = normalize_landmarks(landmarks)
                 buf.push(normalized)
 
-                # Overlay
                 cv2.putText(annotated, f"Mode: {mode}", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 cv2.putText(annotated, f"Buffer: {buf.current_length}/{config.SEQUENCE_LENGTH}",
                             (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-                # Predict
                 if buf.is_ready() and frame_count % PREDICT_EVERY_N == 0:
                     seq = buf.get_sequence()
                     label, conf, raw_label = predictor.predict(seq)
@@ -334,10 +275,8 @@ if start_btn and st.session_state.model_loaded:
                     if label is not None:
                         st.session_state.current_prediction = label
 
-                        # Auto-add to sentence
                         st.session_state.sentence_words.append(label)
 
-                        # Auto-speak the prediction
                         if st.session_state.tts_engine:
                             display_name = label.replace("_", " ")
                             st.session_state.tts_engine.speak(display_name)
@@ -345,7 +284,6 @@ if start_btn and st.session_state.model_loaded:
                         cv2.putText(annotated, f">> {label.upper()} ({conf:.0%})",
                                     (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
 
-                    # Update prediction placeholder in real-time
                     conf_pct = conf * 100
                     display_label = label if label else raw_label
                     conf_color = "#34d399" if conf >= config.CONFIDENCE_THRESHOLD else "#f87171"
@@ -357,7 +295,6 @@ if start_btn and st.session_state.model_loaded:
                     </div>
                     """, unsafe_allow_html=True)
 
-                # Display camera feed
                 h, w = annotated.shape[:2]
                 if w > DISPLAY_WIDTH:
                     scale = DISPLAY_WIDTH / w

@@ -11,7 +11,6 @@ import os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import config
 
-
 class TTSEngine:
     """
     Text-to-Speech engine with toggle, rate control, and thread safety.
@@ -47,7 +46,7 @@ class TTSEngine:
             return
 
         if self._speaking:
-            return  # Skip if already speaking
+            return
 
         thread = threading.Thread(target=self._speak_worker, args=(text,), daemon=True)
         thread.start()
@@ -99,8 +98,6 @@ class TTSEngine:
         """Whether the engine is currently speaking."""
         return self._speaking
 
-
-# ── Standalone Test ────────────────────────────────────────────
 if __name__ == "__main__":
     print("[TEST] Text-to-Speech Engine")
 
@@ -119,7 +116,6 @@ if __name__ == "__main__":
     tts.set_rate(180)
     print("  ✓ Rate set to 180 WPM")
 
-    # Speak test (will produce audio if speakers available)
     print("  → Speaking test phrase...")
     tts.speak("Sign language translator initialized successfully")
 

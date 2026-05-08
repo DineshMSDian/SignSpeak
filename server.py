@@ -17,7 +17,6 @@ import cv2
 import numpy as np
 from io import BytesIO
 
-# Setup path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -32,9 +31,6 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-# ═══════════════════════════════════════════════════════════════
-# App Setup
-# ═══════════════════════════════════════════════════════════════
 app = FastAPI(title="SignSpeak Backend", version="1.0.0")
 
 app.add_middleware(
@@ -44,9 +40,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ═══════════════════════════════════════════════════════════════
-# Global State
-# ═══════════════════════════════════════════════════════════════
 import mediapipe as mp
 
 class SignSpeakBackend:
@@ -58,10 +51,9 @@ class SignSpeakBackend:
         self.label_map = None
         self.predictor = None
 
-        # MediaPipe hands (reused across frames — not per-connection)
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
-            static_image_mode=False,      # was True match training exactly
+            static_image_mode=False,
             max_num_hands=config.NUM_HANDS,
             min_detection_confidence=config.MIN_DETECTION_CONFIDENCE,
             min_tracking_confidence=config.MIN_TRACKING_CONFIDENCE,
@@ -112,23 +104,16 @@ class SignSpeakBackend:
 
         Returns dict with prediction results.
         """
-        # Decode JPEG → numpy array
         nparr = np.frombuffer(jpeg_bytes, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if frame is None:
             return {"error": "Failed to decode frame"}
 
-        # Flip frame horizontally to match original webcam training data orientation
-        # (Otherwise left/right hand x-coordinates are reversed, breaking gestures)
-        # frame = cv2.flip(frame, 1)
-
-        # Convert BGR → RGB for MediaPipe
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = self.hands.process(rgb)
 
-        # Extract landmarks
         all_landmarks = np.zeros(
             (config.NUM_HANDS * config.NUM_LANDMARKS, config.NUM_COORDS),
             dtype=np.float32,
@@ -144,7 +129,6 @@ class SignSpeakBackend:
                 
                 hand_points = []
                 for lm in hand_landmarks.landmark:
-                    # MediaPipe x/y are normalized between 0.0 and 1.0
                     hand_points.append({"x": lm.x, "y": lm.y})
                 flutter_landmarks.append(hand_points)
 
@@ -152,16 +136,12 @@ class SignSpeakBackend:
                     offset = hand_idx * config.NUM_LANDMARKS
                     all_landmarks[offset + lm_idx] = [lm.x, lm.y, lm.z]
 
-        # Normalize landmarks
         normalized = normalize_landmarks(all_landmarks)
         
-        # The Flutter client sends every 3rd frame (~10 FPS) to save bandwidth/CPU.
-        # The model was trained at 30 FPS. Duplicating the frame 3x restores the temporal ratio.
         
         for _ in range(3):
             sequence_buffer.push(normalized)
 
-        # Base result
         result = {
             "num_hands": num_hands,
             "buffer_fill": sequence_buffer.current_length,
@@ -172,7 +152,6 @@ class SignSpeakBackend:
             "landmarks": flutter_landmarks,
         }
 
-        # Run prediction if buffer is ready
         if sequence_buffer.is_ready() and self.predictor:
             seq = sequence_buffer.get_sequence()
             label, conf = self.smoother.update(seq)
@@ -183,13 +162,7 @@ class SignSpeakBackend:
 
         return result
 
-
-# Create singleton backend
 backend = SignSpeakBackend()
-
-# ═══════════════════════════════════════════════════════════════
-# REST Endpoints
-# ═══════════════════════════════════════════════════════════════
 
 @app.get("/health")
 def health():
@@ -200,7 +173,6 @@ def health():
         "classes": len(backend.label_map) if backend.label_map else 0,
     }
 
-
 @app.get("/models")
 def models():
     return {
@@ -209,7 +181,6 @@ def models():
         "asl_model_exists": os.path.exists(config.ASL_MODEL_PATH),
         "isl_model_exists": os.path.exists(config.ISL_MODEL_PATH),
     }
-
 
 @app.post("/set-mode/{mode}")
 def set_mode(mode: str):
@@ -222,27 +193,19 @@ def set_mode(mode: str):
         "class_names": sorted(backend.label_map.keys()) if backend.label_map else [],
     }
 
-
-# ═══════════════════════════════════════════════════════════════
-# WebSocket — Main Frame Processing
-# ═══════════════════════════════════════════════════════════════
-
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("[SERVER] Client connected")
 
-    # Each connection gets its own sequence buffer
     sequence_buffer = SequenceBuffer()
     frame_count = 0
 
     try:
         while True:
-            # Receive binary JPEG frame
             data = await websocket.receive_bytes()
             frame_count += 1
 
-            # Process every frame (Flutter controls the send rate)
             start_time = time.perf_counter()
             result = backend.process_frame(data, sequence_buffer)
             elapsed_ms = (time.perf_counter() - start_time) * 1000
@@ -251,18 +214,12 @@ async def websocket_endpoint(websocket: WebSocket):
             result["processing_ms"] = round(elapsed_ms, 1)
             result["mode"] = backend.current_mode
 
-            # Send JSON result back
             await websocket.send_json(result)
 
     except WebSocketDisconnect:
         print("[SERVER] Client disconnected")
     except Exception as e:
         print(f"[SERVER] Error: {e}")
-
-
-# ═══════════════════════════════════════════════════════════════
-# WebSocket — Mode switching from client
-# ═══════════════════════════════════════════════════════════════
 
 @app.websocket("/ws/control")
 async def control_endpoint(websocket: WebSocket):
@@ -289,11 +246,6 @@ async def control_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         print("[SERVER] Control client disconnected")
 
-
-# ═══════════════════════════════════════════════════════════════
-# Startup
-# ═══════════════════════════════════════════════════════════════
-
 def get_local_ip():
     """Get the local network IP address."""
     try:
@@ -304,7 +256,6 @@ def get_local_ip():
         return ip
     except Exception:
         return "127.0.0.1"
-
 
 if __name__ == "__main__":
     local_ip = get_local_ip()

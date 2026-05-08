@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Prediction card widget — shows current prediction with gradient background.
 /// Matches the CSS .prediction-box styling from the Streamlit app.
 class PredictionCard extends StatelessWidget {
   final String prediction;
@@ -45,7 +44,6 @@ class PredictionCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Label
           Text(
             isLive ? '🔴 LIVE — $mode Prediction' : 'Last Prediction',
             style: const TextStyle(
@@ -57,7 +55,6 @@ class PredictionCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
 
-          // Prediction text
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
             child: Text(
@@ -74,7 +71,6 @@ class PredictionCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
 
-          // Confidence
           Text(
             'Confidence: $confPercent%',
             style: TextStyle(

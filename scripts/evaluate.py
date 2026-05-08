@@ -8,7 +8,6 @@ and inference latency for the trained LSTM model.
 import os
 import sys
 
-# Set env vars FIRST, before any imports that might trigger TF
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
@@ -19,7 +18,6 @@ import time
 import json
 import numpy as np
 
-# Import TF early (same pattern as train.py which works)
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 
@@ -36,14 +34,12 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 
-
 def evaluate():
     """Run full model evaluation pipeline."""
     print("=" * 60)
     print("  SignSpeak — Model Evaluation")
     print("=" * 60)
 
-    # ── Load Model ─────────────────────────────────────────────
     if not os.path.exists(config.MODEL_SAVE_PATH):
         print(f"[ERROR] No trained model found at {config.MODEL_SAVE_PATH}")
         print("[INFO] Run 'python scripts/train.py' first!")
@@ -53,7 +49,6 @@ def evaluate():
     model = load_model(config.MODEL_SAVE_PATH)
     print("[INFO] Model loaded successfully.")
 
-    # ── Load Test Data ─────────────────────────────────────────
     X_test = np.load(os.path.join(config.PROCESSED_DATA_DIR, "X_test.npy"))
     y_test = np.load(os.path.join(config.PROCESSED_DATA_DIR, "y_test.npy"))
 
@@ -66,12 +61,10 @@ def evaluate():
     print(f"\n[INFO] Test samples: {X_test.shape[0]}")
     print(f"[INFO] Classes: {class_names}")
 
-    # ── Predictions ────────────────────────────────────────────
     print("\n[INFO] Running predictions...")
     y_pred_proba = model.predict(X_test, verbose=0)
     y_pred = np.argmax(y_pred_proba, axis=1)
 
-    # ── Classification Metrics ─────────────────────────────────
     accuracy = accuracy_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred, average="macro", zero_division=0)
     recall = recall_score(y_test, y_pred, average="macro", zero_division=0)
@@ -86,11 +79,9 @@ def evaluate():
     print(f"  F1-Score:  {f1:.4f}")
     print("─" * 40)
 
-    # ── Per-Class Report ───────────────────────────────────────
     print("\n  Per-Class Classification Report:")
     print(classification_report(y_test, y_pred, target_names=class_names, zero_division=0))
 
-    # ── Confusion Matrix ───────────────────────────────────────
     cm = confusion_matrix(y_test, y_pred)
 
     fig, ax = plt.subplots(figsize=(max(8, len(class_names)), max(6, len(class_names) * 0.7)))
@@ -117,7 +108,6 @@ def evaluate():
     plt.close()
     print(f"[INFO] Confusion matrix saved → {cm_path}")
 
-    # ── Inference Latency ──────────────────────────────────────
     print("\n[INFO] Measuring inference latency (100 runs)...")
     sample = X_test[:1]
     times = []
@@ -136,7 +126,6 @@ def evaluate():
     print(f"  P99 latency:     {p99_latency:.2f} ms")
     print(f"  Max latency:     {max(times):.2f} ms")
 
-    # ── Save Report ────────────────────────────────────────────
     report = {
         "accuracy": float(accuracy),
         "precision": float(precision),
@@ -156,7 +145,6 @@ def evaluate():
     print(f"\n[INFO] Evaluation report saved → {report_path}")
 
     print("\n[DONE] Evaluation complete!")
-
 
 if __name__ == "__main__":
     try:

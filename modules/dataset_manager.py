@@ -15,7 +15,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import config
 
-
 class DatasetManager:
     """
     Handles creation, storage, and partitioning of gesture sequence datasets.
@@ -35,8 +34,6 @@ class DatasetManager:
         self.processed_dir = processed_dir
         os.makedirs(self.raw_dir, exist_ok=True)
         os.makedirs(self.processed_dir, exist_ok=True)
-
-    # ── Save / Load Sequences ──────────────────────────────────
 
     def save_sequence(self, gesture_label: str, sequence: np.ndarray) -> str:
         """
@@ -83,8 +80,6 @@ class DatasetManager:
             distribution[label] = count
         return distribution
 
-    # ── Build Dataset ──────────────────────────────────────────
-
     def build_dataset(self, test_size: float = 0.2, random_state: int = 42):
         """
         Load all raw sequences, create train/test split, and save as NumPy arrays.
@@ -105,7 +100,6 @@ class DatasetManager:
         if not labels:
             raise ValueError("No gesture data found in raw directory!")
 
-        # Build label map
         label_map = {label: idx for idx, label in enumerate(labels)}
 
         X_all = []
@@ -130,7 +124,6 @@ class DatasetManager:
         print(f"[INFO] Classes: {len(labels)}")
         print(f"[INFO] Distribution: {self.get_class_distribution()}")
 
-        # Stratified split
         X_train, X_test, y_train, y_test = train_test_split(
             X_all, y_all,
             test_size=test_size,
@@ -138,13 +131,11 @@ class DatasetManager:
             stratify=y_all,
         )
 
-        # Save processed arrays
         np.save(os.path.join(self.processed_dir, "X_train.npy"), X_train)
         np.save(os.path.join(self.processed_dir, "X_test.npy"), X_test)
         np.save(os.path.join(self.processed_dir, "y_train.npy"), y_train)
         np.save(os.path.join(self.processed_dir, "y_test.npy"), y_test)
 
-        # Save label map
         with open(config.LABEL_MAP_PATH, "w") as f:
             json.dump(label_map, f, indent=2)
 
@@ -170,8 +161,6 @@ class DatasetManager:
 
         return X_train, X_test, y_train, y_test, label_map
 
-
-# ── Standalone Test ────────────────────────────────────────────
 if __name__ == "__main__":
     dm = DatasetManager()
     print("[INFO] Gesture labels:", dm.get_gesture_labels())

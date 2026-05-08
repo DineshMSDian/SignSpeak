@@ -19,7 +19,7 @@ Expected input folder structure:
 
 Usage:
     python scripts/process_kaggle.py --input path/to/dataset --output data/raw
-    python scripts/process_kaggle.py --input path/to/dataset  # defaults to data/raw
+    python scripts/process_kaggle.py --input path/to/dataset
 """
 
 import os
@@ -35,7 +35,6 @@ import config
 from modules.capture_engine import HandCapture
 from modules.normalization import normalize_landmarks
 from modules.dataset_manager import DatasetManager
-
 
 def extract_sequences_from_video(
     video_path: str,
@@ -67,7 +66,6 @@ def extract_sequences_from_video(
         print(f"  [WARN] Cannot open video: {video_path}")
         return []
 
-    # Extract all frame landmarks
     all_frame_vectors = []
 
     while True:
@@ -75,12 +73,10 @@ def extract_sequences_from_video(
         if not ret:
             break
 
-        # Convert BGR → RGB for MediaPipe
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = hands_detector.process(rgb)
 
-        # Build (42, 3) landmark array
         landmarks = np.zeros(
             (config.NUM_HANDS * config.NUM_LANDMARKS, config.NUM_COORDS),
             dtype=np.float32,
@@ -94,7 +90,6 @@ def extract_sequences_from_video(
                     offset = hand_idx * config.NUM_LANDMARKS
                     landmarks[offset + lm_idx] = [lm.x, lm.y, lm.z]
 
-        # Normalize and store
         normalized = normalize_landmarks(landmarks)
         all_frame_vectors.append(normalized)
 
@@ -102,12 +97,10 @@ def extract_sequences_from_video(
 
     total_frames = len(all_frame_vectors)
     if total_frames < sequence_length:
-        # Video too short — zero-pad to make one sequence
         padding = [np.zeros(config.FEATURE_DIM, dtype=np.float32)] * (sequence_length - total_frames)
         all_frame_vectors = padding + all_frame_vectors
         return [np.array(all_frame_vectors, dtype=np.float32)]
 
-    # Slice into sequences using sliding window
     sequences = []
     for start in range(0, total_frames - sequence_length + 1, stride):
         seq = np.array(
@@ -117,7 +110,6 @@ def extract_sequences_from_video(
         sequences.append(seq)
 
     return sequences
-
 
 def process_dataset(
     input_dir: str,
@@ -142,15 +134,13 @@ def process_dataset(
     if output_dir is None:
         output_dir = config.RAW_DATA_DIR
 
-    # Calculate stride from overlap
     if overlap is not None:
         stride = max(1, int(sequence_length * (1 - overlap)))
     elif stride is None:
-        stride = sequence_length  # non-overlapping
+        stride = sequence_length
 
     dm = DatasetManager(raw_dir=output_dir)
 
-    # Discover gesture classes (subfolders)
     gesture_dirs = sorted([
         d for d in os.listdir(input_dir)
         if os.path.isdir(os.path.join(input_dir, d))
@@ -172,7 +162,6 @@ def process_dataset(
     print(f"  Overlap:         {((sequence_length - stride) / sequence_length) * 100:.0f}%")
     print("=" * 60)
 
-    # Initialize MediaPipe Hands
     import mediapipe as mp
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
@@ -189,7 +178,6 @@ def process_dataset(
         gesture_path = os.path.join(input_dir, gesture)
         gesture_label = gesture.lower().replace(" ", "_").replace("-", "_")
 
-        # Find all video files
         videos = []
         for ext in video_extensions:
             videos.extend(glob.glob(os.path.join(gesture_path, f"*{ext}")))
@@ -220,7 +208,6 @@ def process_dataset(
 
     hands.close()
 
-    # Summary
     print("\n" + "=" * 60)
     print("  PROCESSING COMPLETE")
     print("=" * 60)
@@ -237,7 +224,6 @@ def process_dataset(
     print("    2. python scripts/evaluate.py    # Evaluate performance")
     print("    3. streamlit run app.py          # Launch the translator")
     print("=" * 60)
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -284,7 +270,6 @@ Examples:
         stride=args.stride,
         overlap=args.overlap,
     )
-
 
 if __name__ == "__main__":
     main()

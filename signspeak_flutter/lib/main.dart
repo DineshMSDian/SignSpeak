@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'screens/home_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,13 +19,13 @@ class SignSpeakApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF0A0A1A),
-        colorScheme: ColorScheme.dark(
-          primary: const Color(0xFF6366F1),
-          secondary: const Color(0xFF8B5CF6),
-          surface: const Color(0xFF1E1B4B),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF6366F1),
+          secondary: Color(0xFF8B5CF6),
+          surface: Color(0xFF1E1B4B),
           onPrimary: Colors.white,
           onSecondary: Colors.white,
-          onSurface: const Color(0xFFE0E7FF),
+          onSurface: Color(0xFFE0E7FF),
         ),
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
         appBarTheme: AppBarTheme(
@@ -53,7 +53,7 @@ class SignSpeakApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }

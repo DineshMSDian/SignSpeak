@@ -18,7 +18,6 @@ from modules.capture_engine import HandCapture
 from modules.normalization import normalize_landmarks, SequenceBuffer
 from modules.dataset_manager import DatasetManager
 
-
 def collect_data():
     """
     Interactive gesture data collection.
@@ -69,7 +68,6 @@ def collect_data():
                 if annotated is None:
                     continue
 
-                # Status overlay
                 status = "RECORDING" if recording else "READY"
                 color = (0, 0, 255) if recording else (0, 200, 0)
                 cv2.putText(annotated, f"Gesture: {gesture}", (10, 30),
@@ -82,7 +80,6 @@ def collect_data():
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
                 if recording:
-                    # Progress bar
                     progress = buf.current_length / config.SEQUENCE_LENGTH
                     bar_w = 300
                     cv2.rectangle(annotated, (10, 155), (10 + bar_w, 175), (50, 50, 50), -1)
@@ -90,11 +87,9 @@ def collect_data():
                     cv2.putText(annotated, f"{buf.current_length}/{config.SEQUENCE_LENGTH}",
                                 (320, 172), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-                    # Normalize and push to buffer
                     normalized = normalize_landmarks(landmarks)
                     buf.push(normalized)
 
-                    # Auto-save when buffer is full
                     if buf.is_ready():
                         seq = buf.get_sequence()
                         path = dm.save_sequence(gesture, seq)
@@ -102,7 +97,7 @@ def collect_data():
                         print(f"  ✓ Sample {collected}/{num_samples} saved → {os.path.basename(path)}")
                         buf.reset()
                         recording = False
-                        time.sleep(0.3)  # Brief pause between samples
+                        time.sleep(0.3)
 
                 cv2.imshow("SignSpeak — Data Collection", annotated)
 
@@ -129,7 +124,6 @@ def collect_data():
     for label, count in dm.get_class_distribution().items():
         print(f"  {label}: {count} samples")
     print("\n[DONE] Data collection complete!")
-
 
 if __name__ == "__main__":
     collect_data()

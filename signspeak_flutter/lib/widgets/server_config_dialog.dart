@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config.dart';
 
-/// Dialog for configuring the Python backend server IP address.
 class ServerConfigDialog extends StatefulWidget {
   final String currentIp;
   final int currentPort;

@@ -19,7 +19,6 @@ from tensorflow.keras.models import Sequential, load_model as keras_load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from tensorflow.keras.optimizers import Adam
 
-
 def build_lstm_model(
     num_classes: int,
     sequence_length: int = config.SEQUENCE_LENGTH,
@@ -51,19 +50,15 @@ def build_lstm_model(
     model = Sequential([
         Input(shape=(sequence_length, feature_dim)),
 
-        # First LSTM layer — returns sequences for stacking
         LSTM(lstm_units_1, return_sequences=True),
         Dropout(dropout_rate),
 
-        # Second LSTM layer — returns final hidden state
         LSTM(lstm_units_2, return_sequences=False),
         Dropout(dropout_rate),
 
-        # Dense classification head
         Dense(dense_units, activation="relu"),
         Dropout(dropout_rate),
 
-        # Output layer
         Dense(num_classes, activation="softmax"),
     ])
 
@@ -74,7 +69,6 @@ def build_lstm_model(
     )
 
     return model
-
 
 def load_trained_model(model_path: str = config.MODEL_SAVE_PATH):
     """
@@ -93,13 +87,11 @@ def load_trained_model(model_path: str = config.MODEL_SAVE_PATH):
     print(f"[INFO] Model loaded from {model_path}")
     return model
 
-
 def get_model_summary(model: tf.keras.Model) -> str:
     """Return model summary as a string."""
     lines = []
     model.summary(print_fn=lambda x: lines.append(x))
     return "\n".join(lines)
-
 
 def get_training_callbacks(
     model_save_path: str = config.MODEL_SAVE_PATH,
@@ -137,8 +129,6 @@ def get_training_callbacks(
 
     return callbacks
 
-
-# ── Standalone Test ────────────────────────────────────────────
 if __name__ == "__main__":
     print("[TEST] Building LSTM Model")
     model = build_lstm_model(num_classes=10)
